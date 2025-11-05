@@ -1,64 +1,81 @@
+#!/usr/bin/env python3
+import subprocess
+import json
 import socket
-import time
-import pickle
-from mini_bdx_runtime.imu import Imu
-from threading import Thread
-import time
 
-import argparse
+HOST = "0.0.0.0"
+PORT = 5000
 
+def clear_sensor_cache():
+    subprocess.run(["termux-sensor", "-c"], check=False)
 
+def start_sensor_stream():
+    return subprocess.Popen(
+        ["termux-sensor", "-s", "Rotation", "-d", "20"],
+        stdout=subprocess.PIPE,
+        text=True,
+        bufsize=1
+    )
 
-class IMUServer:
-    def __init__(self, imu=None):
-        self.host = "0.0.0.0"
-        self.port = 1234
+def start_server():
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    sock.bind((HOST, PORT))
+    sock.listen(1)
+    print(f"📡 Server listening on {HOST}:{PORT}")
+    return sock
 
-        self.server_socket = socket.socket()
-        self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1) # enable address reuse
+def main():
+    clear_sensor_cache()
+    process = start_sensor_stream()
+    sock = start_server()
 
-        self.server_socket.bind((self.host, self.port))
+    conn = None
+    buffer = ""
 
-        if imu is None:
-            self.imu = Imu(50, user_pitch_bias=args.pitch_bias, upside_down=False)
-        else:
-            self.imu = imu
-        self.stop = False
+    while True:
+        if conn is None:
+            print("🕓 Waiting for client...")
+            conn, addr = sock.accept()
+            print(f"✅ Client connected: {addr}")
 
-        Thread(target=self.run, daemon=True).start()
+        try:
+            line = process.stdout.readline()
+            if not line:
+                continue
 
+            buffer += line.strip()
+            if buffer.startswith("{") and buffer.endswith("}"):
+                try:
+                    data = json.loads(buffer)
+                    buffer = ""
+                except json.JSONDecodeError:
+                    continue
 
-    def run(self):
-        while not self.stop:
-            self.server_socket.listen(1)
-            conn, address = self.server_socket.accept()  # accept new connection
-            print("Connection from: " + str(address))
-            try:
-                while True:
-                    data = self.imu.get_data()
-                    data = pickle.dumps(data)
-                    conn.send(data)  # send data to the client
-                    time.sleep(1 / 30)
-            except:
-                pass
-        
-    
-        self.server_socket.close()
-        print("thread closed")
-        time.sleep(1)
+                if not data:
+                    continue
 
+                sensor_name = list(data.keys())[0]
+                values = data[sensor_name]["values"]
+                yaw, pitch, roll = values[0], values[1], values[2]
+                msg = f"{yaw},{pitch},{roll}\n"
+
+                try:
+                    conn.sendall(msg.encode("utf-8"))
+                    print("📤 Sent:", msg.strip())
+                except (BrokenPipeError, ConnectionResetError):
+                    print("⚠️ Client disconnected. Reopening socket...")
+                    conn.close()
+                    conn = None
+
+        except KeyboardInterrupt:
+            print("🛑 Stopping...")
+            break
+
+    process.terminate()
+    if conn:
+        conn.close()
+    sock.close()
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--pitch_bias", type=float, default=0, help="deg")
-    args = parser.parse_args()
-    imu_server = IMUServer()
-    try:
-        while True:
-            time.sleep(0.01)
-    except KeyboardInterrupt:
-        print("Closing server")
-        imu_server.stop = True
-
-    time.sleep(2)
-
+    main()
