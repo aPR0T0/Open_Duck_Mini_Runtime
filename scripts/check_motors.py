@@ -6,11 +6,12 @@ import time
 
 NUM_SERVOS = 14  # Number of servos to scan
 io = FeetechSTS3215IO("/dev/ttyACM0")
+hwi = HWI()
 
-servo_dict = {value:key for key, value in HWI().joints.items()}
+servo_dict = {value:key for key, value in hwi.joints.items()}
 
-def scan():
-    id = None
+def scan(): 
+    id = 0
     for i in range(NUM_SERVOS):
 
         print(f"scanning for id {i} ...")

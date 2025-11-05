@@ -6,8 +6,8 @@ from threading import Thread
 
 # RGB LED pins
 RED_PIN = 19
-GREEN_PIN = 26
-BLUE_PIN = 13
+GREEN_PIN = 13
+BLUE_PIN = 6
 
 # Default eye color (dark blue)
 EYE_COLOR = np.array([8, 29, 54])/255

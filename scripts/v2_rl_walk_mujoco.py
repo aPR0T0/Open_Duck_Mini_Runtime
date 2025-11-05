@@ -26,6 +26,7 @@ class RLWalk:
         robot="dino",
         initial_policy_type="standing",
         cutoff_freq=50.0,
+        teleop_host="10.144.135.208",
     ):
 
         # Control
@@ -39,7 +40,7 @@ class RLWalk:
         self.eyes = Eyes()
         #self.projector = Projector()
 
-        self.head_teleop_client = HeadTelop()
+        self.head_teleop_client = HeadTelop(teleop_host)
         self.head_teleop_client.start()
 
         self.hwi = HWI(serial_port)
@@ -368,6 +369,12 @@ if __name__ == "__main__":
         default=50.0, 
         help="Cutoff frequency for low-pass filter"
     )
+    parser.add_argument(
+        "--teleop_host", 
+        type=str, 
+        default="10.144.135.208", 
+        help="Teleop controller's IP"
+    )
 
     args = parser.parse_args()
     pid = [args.p, args.i, args.d]
@@ -378,6 +385,7 @@ if __name__ == "__main__":
         pid=pid,
         robot=args.robot,
         initial_policy_type=args.policy_type,
-        cutoff_freq=args.cutoff_freq
+        cutoff_freq=args.cutoff_freq,
+        teleop_host=args.teleop_host
     )
     rl_walk.run()
